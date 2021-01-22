@@ -1,10 +1,10 @@
-use std::fs;
 use std::fs::DirEntry;
 use std::{env, path::PathBuf};
+use std::{fs, vec};
 
-use image::{imageops, GenericImage, GenericImageView, ImageBuffer, RgbImage};
+use image::{imageops, GenericImage, GenericImageView, ImageBuffer, RgbImage, Rgba};
 use imageops::FilterType;
-use FilterType::Nearest;
+use rayon::prelude::*;
 /// * get all files -check
 /// * find out how many columns
 ///     * start with "half the images"
@@ -44,26 +44,20 @@ fn main() -> Result<(), Box<std::error::Error>> {
     }
 
     let mut grid = ImageGrid { columns };
-
     for image in images {
         let (org_width, org_height) = image::io::Reader::open(image.path())?.into_dimensions()?;
         let ratio = org_height as f32 / org_width as f32;
         let new_height = (column_width as f32 * ratio) as u32;
         grid.add_to_lowest_column(new_height, image.path());
     }
-    let mut x = 0;
-
-    for colum in grid.columns {
-        let mut offset = 0;
-        for (image_height, image_path) in colum.image_paths {
-            let img = image::io::Reader::open(image_path)?.decode()?;
-            let resized_image =
-                image::imageops::resize(&img, column_width, image_height, FilterType::Gaussian);
-
-            image::imageops::overlay(&mut target_img, &resized_image, x, offset);
-            offset = offset + image_height;
-        }
-        x = x + column_width;
+    let image_infos = grid.get_imageInfo(column_width);
+    for image_info in image_infos {
+        image::imageops::overlay(
+            &mut target_img,
+            &image_info.resized_image,
+            image_info.x,
+            image_info.offset,
+        );
     }
 
     target_img.save("output.png")?;
@@ -82,6 +76,48 @@ impl ImageGrid {
         self.columns[0].image_paths.push((image_height, image_path));
         self.columns[0].column_height += image_height;
     }
+
+    pub fn get_imageInfo(&self, column_width: u32) -> Vec<ImageInfo> {
+        self.columns
+            .par_iter()
+            .enumerate()
+            .flat_map(|(column_number, column)| {
+                let x = column_number as u32 * column_width as u32;
+                let mut columnImages: Vec<ImageInfo> = column
+                    .image_paths
+                    .par_iter()
+                    .map(move |(height, path)| {
+                        let img = image::io::Reader::open(path).unwrap().decode().unwrap();
+                        let resized_image = image::imageops::resize(
+                            &img,
+                            column_width,
+                            *height,
+                            FilterType::Gaussian,
+                        );
+                        ImageInfo {
+                            x,
+                            offset: 0, //TODO
+                            image_height: *height,
+                            resized_image,
+                        }
+                    })
+                    .collect();
+                let mut offset = 0;
+                for image in columnImages.iter_mut() {
+                    image.offset = offset;
+                    offset = offset + image.image_height;
+                }
+                columnImages
+            })
+            .collect()
+    }
+}
+
+pub struct ImageInfo {
+    x: u32,
+    offset: u32,
+    image_height: u32,
+    resized_image: ImageBuffer<Rgba<u8>, Vec<u8>>,
 }
 
 #[derive(Default, Debug)]
