@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<std::error::Error>> {
         let new_height = (column_width as f32 * ratio) as u32;
         grid.add_to_lowest_column(new_height, image.path());
     }
-    let image_infos = grid.get_imageInfo(column_width);
+    let image_infos = grid.get_image_info(column_width);
     for image_info in image_infos {
         image::imageops::overlay(
             &mut target_img,
@@ -77,7 +77,7 @@ impl ImageGrid {
         self.columns[0].column_height += image_height;
     }
 
-    pub fn get_imageInfo(&self, column_width: u32) -> Vec<ImageInfo> {
+    pub fn get_image_info(&self, column_width: u32) -> Vec<ImageInfo> {
         self.columns
             .par_iter()
             .enumerate()
