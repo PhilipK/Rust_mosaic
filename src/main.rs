@@ -28,29 +28,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //0 is program itself
     let files_path = &args[1];
     let number_of_columns = args[2]
-        .parse::<i32>()
+        .parse::<u32>()
         .expect("column number must be an int")
         .clone();
 
     let images = get_images_in_folder(files_path);
 
+    let org_image_info: Vec<OrgImageInfo> = images
+        .par_iter()
+        .map(|image| {
+            let (org_width, org_height) = image::io::Reader::open(image.path())
+                .unwrap()
+                .into_dimensions()
+                .unwrap();
+            OrgImageInfo {
+                width: org_width,
+                height: org_height,
+                path: image.path(),
+            }
+        })
+        .collect();
+
     let mut target_img = ImageBuffer::new(width, height);
-
-    let column_width = (width as f32 / number_of_columns as f32).ceil() as u32;
-
-    let mut columns = vec![];
-    for _ in 0..number_of_columns {
-        columns.push(ImageColumn::default());
-    }
-
-    let mut grid = ImageGrid { columns };
-    for image in images {
-        let (org_width, org_height) = image::io::Reader::open(image.path())?.into_dimensions()?;
-        let ratio = org_height as f32 / org_width as f32;
-        let new_height = (column_width as f32 * ratio) as u32;
-        grid.add_to_lowest_column(new_height, image.path());
-    }
-    let image_infos = grid.get_image_info(column_width);
+    let grid = create_image_grid(number_of_columns, width, &org_image_info);
+    let image_infos = grid.get_image_info();
     for image_info in image_infos {
         image::imageops::overlay(
             &mut target_img,
@@ -65,8 +66,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+pub fn create_image_grid(
+    number_of_columns: u32,
+    target_width: u32,
+    org_image_info: &Vec<OrgImageInfo>,
+) -> ImageGrid {
+    let column_width = (target_width as f32 / number_of_columns as f32).ceil() as u32;
+
+    let mut columns = vec![];
+    for _ in 0..number_of_columns {
+        columns.push(ImageColumn::default());
+    }
+
+    let mut grid = ImageGrid {
+        columns,
+        column_width,
+    };
+    for image in org_image_info {
+        let ratio = image.height as f32 / image.width as f32;
+        let new_height = (column_width as f32 * ratio) as u32;
+        grid.add_to_lowest_column(new_height, image.path.clone());
+    }
+    grid
+}
+
 #[derive(Default, Debug)]
 pub struct ImageGrid {
+    column_width: u32,
     columns: Vec<ImageColumn>,
 }
 
@@ -77,13 +103,14 @@ impl ImageGrid {
         self.columns[0].column_height += image_height;
     }
 
-    pub fn get_image_info(&self, column_width: u32) -> Vec<ImageInfo> {
+    pub fn get_image_info(&self) -> Vec<FinalImageInfo> {
+        let column_width = self.column_width;
         self.columns
             .par_iter()
             .enumerate()
             .flat_map(|(column_number, column)| {
                 let x = column_number as u32 * column_width as u32;
-                let mut column_images: Vec<ImageInfo> = column
+                let mut column_images: Vec<FinalImageInfo> = column
                     .image_paths
                     .par_iter()
                     .map(move |(height, path)| {
@@ -94,7 +121,7 @@ impl ImageGrid {
                             *height,
                             FilterType::Gaussian,
                         );
-                        ImageInfo {
+                        FinalImageInfo {
                             x,
                             offset: 0, //TODO
                             image_height: *height,
@@ -112,8 +139,13 @@ impl ImageGrid {
             .collect()
     }
 }
+pub struct OrgImageInfo {
+    width: u32,
+    height: u32,
+    path: PathBuf,
+}
 
-pub struct ImageInfo {
+pub struct FinalImageInfo {
     x: u32,
     offset: u32,
     image_height: u32,
