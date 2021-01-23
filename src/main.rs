@@ -5,16 +5,6 @@ use std::{fs, vec};
 use image::{imageops, ImageBuffer, Rgba};
 use imageops::FilterType;
 use rayon::prelude::*;
-/// * get all files -check
-/// * find out how many columns
-///     * start with "half the images"
-///     * try column size, fill out columns (always go with lowest)
-///     * if all columns are full, go op by 50% (binary search)
-///     * if columns are empty, go down by 50%
-/// * when found the right size, return the info about grid
-/// * blend each image into the new image
-/// * save the output image to file
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
