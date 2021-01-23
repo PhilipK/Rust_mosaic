@@ -27,13 +27,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (width, height) = (3840, 2160);
     //0 is program itself
     let files_path = &args[1];
-    let number_of_columns = args[2]
-        .parse::<u32>()
-        .expect("column number must be an int")
-        .clone();
 
+    println!("Loading images");
     let images = get_images_in_folder(files_path);
-
+    println!("Finding image sizes");
     let org_image_info: Vec<OrgImageInfo> = images
         .par_iter()
         .map(|image| {
@@ -48,10 +45,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .collect();
+    println!("Finding optimal grid size");
+    let grid = (2..images.len() / 2)
+        .into_par_iter()
+        .map(|number_of_columns| {
+            create_image_grid(number_of_columns as u32, width, &org_image_info)
+        })
+        .min_by_key(|grid| grid.get_wasted_pixels(height))
+        .expect("Should have a grid");
+
+    let wasted_pixels = grid.get_wasted_pixels(height);
+    println!(
+        "Best with  {} columns: Wasted pixels: {}",
+        grid.columns.len(),
+        wasted_pixels
+    );
 
     let mut target_img = ImageBuffer::new(width, height);
-    let grid = create_image_grid(number_of_columns, width, &org_image_info);
+    println!("Scaling images");
     let image_infos = grid.get_image_info();
+    println!("Merging into one image");
     for image_info in image_infos {
         image::imageops::overlay(
             &mut target_img,
@@ -60,9 +73,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             image_info.offset,
         );
     }
-
+    println!("Saving image");
     target_img.save("output.png")?;
-
+    println!("Done");
     Ok(())
 }
 
@@ -97,8 +110,19 @@ pub struct ImageGrid {
 }
 
 impl ImageGrid {
+    pub fn get_wasted_pixels(&self, target_height: u32) -> u32 {
+        self.columns
+            .par_iter()
+            .map(|column| {
+                let column_pixels = (column.column_height * self.column_width) as i32;
+                let image_pixels = (self.column_width * target_height) as i32;
+                (column_pixels - image_pixels).abs() as u32
+            })
+            .sum()
+    }
+
     pub fn add_to_lowest_column(&mut self, image_height: u32, image_path: PathBuf) {
-        self.columns.sort_by_key(|f| f.column_height);
+        self.columns.par_sort_by_key(|f| f.column_height);
         self.columns[0].image_paths.push((image_height, image_path));
         self.columns[0].column_height += image_height;
     }
