@@ -46,7 +46,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
     println!("Finding optimal grid size");
-    let grid = (2..images.len() / 2)
+    let try_range = 2..images.len() / 2;
+    println!(
+        "Trying {} dirrent column configurations, from {:?} to {:?}",
+        try_range.len(),
+        2,
+        images.len() / 2
+    );
+    let grid = try_range
         .into_par_iter()
         .map(|number_of_columns| {
             create_image_grid(number_of_columns as u32, width, &org_image_info)
@@ -62,7 +69,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut target_img = ImageBuffer::new(width, height);
-    println!("Scaling images");
+    println!("Scaling  {} images", images.len());
     let image_infos = grid.get_image_info();
     println!("Merging into one image");
     for image_info in image_infos {
