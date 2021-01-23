@@ -2,7 +2,7 @@ use std::fs::DirEntry;
 use std::{env, path::PathBuf};
 use std::{fs, vec};
 
-use image::{imageops, GenericImage, GenericImageView, ImageBuffer, RgbImage, Rgba};
+use image::{imageops, ImageBuffer, Rgba};
 use imageops::FilterType;
 use rayon::prelude::*;
 /// * get all files -check
@@ -15,7 +15,7 @@ use rayon::prelude::*;
 /// * blend each image into the new image
 /// * save the output image to file
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
@@ -83,7 +83,7 @@ impl ImageGrid {
             .enumerate()
             .flat_map(|(column_number, column)| {
                 let x = column_number as u32 * column_width as u32;
-                let mut columnImages: Vec<ImageInfo> = column
+                let mut column_images: Vec<ImageInfo> = column
                     .image_paths
                     .par_iter()
                     .map(move |(height, path)| {
@@ -103,11 +103,11 @@ impl ImageGrid {
                     })
                     .collect();
                 let mut offset = 0;
-                for image in columnImages.iter_mut() {
+                for image in column_images.iter_mut() {
                     image.offset = offset;
                     offset = offset + image.image_height;
                 }
-                columnImages
+                column_images
             })
             .collect()
     }
