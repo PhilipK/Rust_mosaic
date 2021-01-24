@@ -27,6 +27,8 @@ struct Opts {
     image_height: u32,
     #[clap(short, long)]
     randomize: Option<bool>,
+    #[clap(short, long)]
+    force_full_columns: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -78,6 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|number_of_columns| {
             create_image_grid(number_of_columns as u32, width, &org_image_info)
         })
+        .filter(|c| !(opts.force_full_columns && c.has_empty_space(height)))
         .min_by_key(|grid| grid.get_wasted_pixels(height))
         .expect("Should have a grid");
 
@@ -146,6 +149,12 @@ impl ImageGrid {
                 (column_pixels - image_pixels).abs() as u32
             })
             .sum()
+    }
+
+    pub fn has_empty_space(&self, target_height: u32) -> bool {
+        self.columns
+            .par_iter()
+            .any(|c| c.column_height < target_height)
     }
 
     pub fn add_to_lowest_column(&mut self, image_height: u32, image_path: PathBuf) {
