@@ -17,18 +17,37 @@ use clap::Clap;
     author = "Philip Kristoffersen <philipkristoffersen@gmail.com>"
 )]
 struct Opts {
-    #[clap(short, long, default_value = "output.png")]
+    #[clap(
+        short,
+        long,
+        default_value = "output.png",
+        about = "The output file to write to mosaic to"
+    )]
     output_file: String,
-    #[clap(short, long, default_value = ".")]
+
+    #[clap(
+        short,
+        long,
+        default_value = ".",
+        about = "The folder that contains the images to put in the mosaic"
+    )]
     images_folder: String,
+
     #[clap(long, default_value = "1920")]
     image_width: u32,
+
     #[clap(long, default_value = "1080")]
     image_height: u32,
-    #[clap(short, long)]
+
+    #[clap(short, long, about = "Randomize the order of images in the columns")]
     randomize: Option<bool>,
-    #[clap(short, long)]
-    force_full_columns: bool,
+
+    #[clap(
+        short,
+        long,
+        about = "Allow whitespace in the target image [default: true]"
+    )]
+    allow_whitespace: Option<bool>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -75,12 +94,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         2,
         images.len() / 2
     );
+    let allow_whitespace = match opts.allow_whitespace {
+        Some(v) => v,
+        None => true,
+    };
     let grid = try_range
         .into_par_iter()
         .map(|number_of_columns| {
             create_image_grid(number_of_columns as u32, width, &org_image_info)
         })
-        .filter(|c| !(opts.force_full_columns && c.has_empty_space(height)))
+        .filter(|c| (allow_whitespace || !c.has_empty_space(height)))
         .min_by_key(|grid| grid.get_wasted_pixels(height))
         .expect("Should have a grid");
 
