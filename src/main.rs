@@ -1,27 +1,51 @@
+extern crate rand;
+
 use std::fs::DirEntry;
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 use std::{fs, vec};
 
 use image::{imageops, ImageBuffer, Rgba};
 use imageops::FilterType;
+use rand::{prelude::SliceRandom, thread_rng};
 use rayon::prelude::*;
+
+use clap::Clap;
+
+#[derive(Clap)]
+#[clap(
+    version = "1.0",
+    author = "Philip Kristoffersen <philipkristoffersen@gmail.com>"
+)]
+struct Opts {
+    #[clap(short, long, default_value = "output.png")]
+    output_file: String,
+    #[clap(short, long, default_value = ".")]
+    images_folder: String,
+    #[clap(long, default_value = "1920")]
+    image_width: u32,
+    #[clap(long, default_value = "1080")]
+    image_height: u32,
+    #[clap(short, long)]
+    randomize: Option<bool>,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
+    let opts: Opts = Opts::parse();
 
-    if args.len() < 2 {
-        //0 is program itself
-        println!("Expecting 1 argument, an input dir with images");
-        return Ok(());
-    }
-
-    let (width, height) = (3840, 2160);
-    //0 is program itself
-    let files_path = &args[1];
+    let (width, height) = (opts.image_width, opts.image_height);
 
     println!("Loading images");
-    let images = get_images_in_folder(files_path);
+    let images = get_images_in_folder(&opts.images_folder);
+    if images.len() == 0 {
+        println!("Did not find any images in folder {}", opts.images_folder);
+        return Ok(());
+    }
+    if images.len() == 1 {
+        println!("Only found one image in folder {}", opts.images_folder);
+        return Ok(());
+    }
     println!("Finding image sizes");
-    let org_image_info: Vec<OrgImageInfo> = images
+    let mut org_image_info: Vec<OrgImageInfo> = images
         .par_iter()
         .map(|image| {
             let (org_width, org_height) = image::io::Reader::open(image.path())
@@ -35,6 +59,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .collect();
+    if let Some(true) = opts.randomize.or(Some(true)) {
+        println!("Randomizing images");
+        let mut rng = thread_rng();
+        org_image_info.shuffle(&mut rng);
+    }
+
     println!("Finding optimal grid size");
     let try_range = 2..images.len() / 2;
     println!(
@@ -71,7 +101,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     println!("Saving image");
-    target_img.save("output.png")?;
+    target_img.save(opts.output_file)?;
     println!("Done");
     Ok(())
 }
