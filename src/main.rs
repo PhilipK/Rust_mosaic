@@ -41,13 +41,6 @@ struct Opts {
 
     #[clap(short, long, about = "Randomize the order of images in the columns")]
     randomize: Option<bool>,
-
-    #[clap(
-        short,
-        long,
-        about = "Allow whitespace in the target image [default: true]"
-    )]
-    allow_whitespace: Option<bool>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Loading images");
     let images = get_images_in_folder(&opts.images_folder);
-    if images.len() == 0 {
+    if images.is_empty() {
         println!("Did not find any images in folder {}", opts.images_folder);
         return Ok(());
     }
@@ -89,21 +82,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Finding optimal grid size");
     let try_range = 2..images.len() / 2;
     println!(
-        "Trying {} dirrent column configurations, from {:?} to {:?}",
+        "Trying {} column configurations, from {:?} to {:?}",
         try_range.len(),
         2,
         images.len() / 2
     );
-    let allow_whitespace = match opts.allow_whitespace {
-        Some(v) => v,
-        None => true,
-    };
+
     let grid = try_range
         .into_par_iter()
         .map(|number_of_columns| {
             create_image_grid(number_of_columns as u32, width, &org_image_info)
         })
-        .filter(|c| (allow_whitespace || !c.has_empty_space(height)))
+        .filter(|c| (c.has_empty_space(height)))
         .min_by_key(|grid| grid.get_wasted_pixels(height))
         .expect("Should have a grid");
 
@@ -116,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut target_img = ImageBuffer::new(width, height);
     println!("Scaling  {} images", images.len());
-    let image_infos = grid.get_image_info();
+    let image_infos = grid.get_image_info(height);
     println!("Merging into one image");
     for image_info in image_infos {
         image::imageops::overlay(
@@ -135,7 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 pub fn create_image_grid(
     number_of_columns: u32,
     target_width: u32,
-    org_image_info: &Vec<OrgImageInfo>,
+    org_image_info: &[OrgImageInfo],
 ) -> ImageGrid {
     let column_width = (target_width as f32 / number_of_columns as f32).ceil() as u32;
 
@@ -186,7 +176,7 @@ impl ImageGrid {
         self.columns[0].column_height += image_height;
     }
 
-    pub fn get_image_info(&self) -> Vec<FinalImageInfo> {
+    pub fn get_image_info(&self, target_height: u32) -> Vec<FinalImageInfo> {
         let column_width = self.column_width;
         self.columns
             .par_iter()
@@ -206,7 +196,7 @@ impl ImageGrid {
                         );
                         FinalImageInfo {
                             x,
-                            offset: 0, //TODO
+                            offset: 0,
                             image_height: *height,
                             resized_image,
                         }
@@ -215,7 +205,15 @@ impl ImageGrid {
                 let mut offset = 0;
                 for image in column_images.iter_mut() {
                     image.offset = offset;
-                    offset = offset + image.image_height;
+                    offset += image.image_height;
+                }
+                let mut i = 0;
+                while offset < target_height {
+                    let mut pad_image = column_images[i].clone();
+                    pad_image.offset = offset;
+                    offset += pad_image.image_height;
+                    column_images.push(pad_image);
+                    i += 1;
                 }
                 column_images
             })
@@ -228,6 +226,7 @@ pub struct OrgImageInfo {
     path: PathBuf,
 }
 
+#[derive(Clone)]
 pub struct FinalImageInfo {
     x: u32,
     offset: u32,
@@ -241,7 +240,7 @@ pub struct ImageColumn {
     column_height: u32,
 }
 
-fn get_images_in_folder(path: &String) -> Vec<DirEntry> {
+fn get_images_in_folder(path: &str) -> Vec<DirEntry> {
     match fs::read_dir(path) {
         Ok(entries) => entries.filter_map(|f| match f {
             Ok(entry) => match entry.path().extension() {
