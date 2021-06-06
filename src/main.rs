@@ -141,18 +141,18 @@ pub fn create_image_grid(
     for image in org_image_info {
         let ratio = image.height as f32 / image.width as f32;
         let new_height = (column_width as f32 * ratio) as u32;
-        grid.add_to_lowest_column(new_height, image.path.clone());
+        grid.add_to_lowest_column(new_height, &image.path);
     }
     grid
 }
 
 #[derive(Default, Debug)]
-pub struct ImageGrid {
+pub struct ImageGrid<'a> {
     column_width: u32,
-    columns: Vec<ImageColumn>,
+    columns: Vec<ImageColumn<'a>>,
 }
 
-impl ImageGrid {
+impl<'a> ImageGrid<'a> {
     pub fn get_wasted_pixels(&self, target_height: u32) -> u32 {
         self.columns
             .par_iter()
@@ -170,7 +170,7 @@ impl ImageGrid {
             .any(|c| c.column_height < target_height)
     }
 
-    pub fn add_to_lowest_column(&mut self, image_height: u32, image_path: PathBuf) {
+    pub fn add_to_lowest_column(&mut self, image_height: u32, image_path: &'a PathBuf) {
         self.columns.par_sort_by_key(|f| f.column_height);
         self.columns[0].image_paths.push((image_height, image_path));
         self.columns[0].column_height += image_height;
@@ -235,8 +235,8 @@ pub struct FinalImageInfo {
 }
 
 #[derive(Default, Debug)]
-pub struct ImageColumn {
-    image_paths: Vec<(u32, PathBuf)>,
+pub struct ImageColumn<'a> {
+    image_paths: Vec<(u32, &'a PathBuf)>,
     column_height: u32,
 }
 
