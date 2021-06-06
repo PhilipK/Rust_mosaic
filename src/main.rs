@@ -2,6 +2,7 @@ extern crate rand;
 
 use std::fs::DirEntry;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use std::{fs, vec};
 
 use image::{imageops, ImageBuffer, Rgba};
@@ -44,11 +45,13 @@ struct Opts {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let now = SystemTime::now();
     let opts: Opts = Opts::parse();
 
     let (width, height) = (opts.image_width, opts.image_height);
 
-    println!("Loading images");
+    println!("Loading images {}", now.elapsed().unwrap().as_millis());
+
     let images = get_images_in_folder(&opts.images_folder);
     if images.is_empty() {
         println!("Did not find any images in folder {}", opts.images_folder);
@@ -58,7 +61,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Only found one image in folder {}", opts.images_folder);
         return Ok(());
     }
-    println!("Finding image sizes");
+    println!("Finding image sizes {}", now.elapsed().unwrap().as_millis());
     let mut org_image_info: Vec<OrgImageInfo> = images
         .par_iter()
         .map(|image| {
@@ -74,12 +77,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
     if let Some(true) = opts.randomize.or(Some(true)) {
-        println!("Randomizing images");
+        println!("Randomizing images {}", now.elapsed().unwrap().as_millis());
         let mut rng = thread_rng();
         org_image_info.shuffle(&mut rng);
     }
 
-    println!("Finding optimal grid size");
+    println!(
+        "Finding optimal grid size {}",
+        now.elapsed().unwrap().as_millis()
+    );
+
+    let before = SystemTime::now();
     let try_range = 2..images.len() / 2;
     println!(
         "Trying {} column configurations, from {:?} to {:?}",
@@ -96,18 +104,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|c| (c.has_empty_space(height)))
         .min_by_key(|grid| grid.get_wasted_pixels(height))
         .expect("Should have a grid");
-
+  println!(
+        "Found optimal in {}nano",
+        before.elapsed().unwrap().as_nanos()
+    );
     let wasted_pixels = grid.get_wasted_pixels(height);
     println!(
-        "Best with  {} columns: Wasted pixels: {}",
+        "Best with  {} columns: Wasted pixels: {} - {}",
         grid.columns.len(),
-        wasted_pixels
+        wasted_pixels,
+        now.elapsed().unwrap().as_millis()
     );
 
     let mut target_img = ImageBuffer::new(width, height);
-    println!("Scaling  {} images", images.len());
+    println!(
+        "Scaling  {} images  - {}",
+        images.len(),
+        now.elapsed().unwrap().as_millis()
+    );
     let image_infos = grid.get_image_info(height);
-    println!("Merging into one image");
+    println!(
+        "Merging into one image - {}",
+        now.elapsed().unwrap().as_millis()
+    );
     for image_info in image_infos {
         image::imageops::overlay(
             &mut target_img,
@@ -116,9 +135,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             image_info.offset,
         );
     }
-    println!("Saving image");
+    println!("Saving image {}", now.elapsed().unwrap().as_millis());
     target_img.save(opts.output_file)?;
-    println!("Done");
+    println!("Done {}", now.elapsed().unwrap().as_millis());
     Ok(())
 }
 
@@ -186,7 +205,7 @@ impl<'a> ImageGrid<'a> {
                 let mut column_images: Vec<FinalImageInfo> = column
                     .image_paths
                     .par_iter()
-                    .map(move |(height, path)| {
+                    .map(|(height, path)| {
                         let img = image::io::Reader::open(path).unwrap().decode().unwrap();
                         let resized_image = image::imageops::resize(
                             &img,
