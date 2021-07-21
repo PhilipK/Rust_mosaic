@@ -76,7 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .collect();
-    org_image_info.sort_by_key(|f|  ((f.height as f32 / f.width as f32) * 10000. )as u32  );
+    org_image_info.sort_by_key(|f| ((f.height as f32 / f.width as f32) * 10000.) as u32);
     if let Some(true) = opts.randomize.or(Some(true)) {
         println!("Randomizing images {}", now.elapsed().unwrap().as_millis());
         let mut rng = thread_rng();
@@ -97,17 +97,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         images.len() / 2
     );
 
-        let all_grids:Vec<ImageGrid> =try_range
+    let all_grids: Vec<ImageGrid> = try_range
         .into_par_iter()
         .map(|number_of_columns| {
             create_image_grid(number_of_columns as u32, width, &org_image_info)
-        }).collect();
+        })
+        .collect();
 
-    let gridh = all_grids.iter().filter(|c| (c.has_overfull_columns(height))).count();
+    let gridh = all_grids
+        .iter()
+        .filter(|c| (c.has_overfull_columns(height)))
+        .count();
     let grid = all_grids.get(gridh).unwrap();
-    
-            
-        
+
     println!(
         "Found optimal in {}nano",
         before.elapsed().unwrap().as_nanos()
@@ -160,7 +162,7 @@ pub fn create_image_grid(
     let mut grid = ImageGrid {
         column_width,
         columns,
-        number_of_columns    
+        number_of_columns,
     };
     for image in org_image_info {
         let ratio = image.height as f32 / image.width as f32;
@@ -194,7 +196,6 @@ impl<'a> ImageGrid<'a> {
             .par_iter()
             .any(|c| c.column_height < target_height)
     }
-
 
     pub fn has_overfull_columns(&self, target_height: u32) -> bool {
         self.columns
@@ -239,7 +240,7 @@ impl<'a> ImageGrid<'a> {
                     image.offset = offset;
                     offset += image.image_height;
                 }
-                column_images.sort_by_key(|c|c.image_height);
+                column_images.sort_by_key(|c| c.image_height);
                 column_images.reverse();
 
                 let mut i = 0;
